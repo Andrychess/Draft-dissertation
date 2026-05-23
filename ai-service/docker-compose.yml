@@ -1,0 +1,13 @@
+version: "3.8"
+
+services:
+  ai-service:
+    build: .
+    environment:
+      MODEL_PATH: /app/models/mistral-7b-instruct-v0.1.Q4_K_S.gguf
+      PASSING_THRESHOLD: 0.6
+      CONFIDENCE_THRESHOLD: 0.7
+    volumes:
+      - ../models:/app/models
+    ports:
+      - "8001:8001"

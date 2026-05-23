@@ -1,0 +1,41 @@
+{
+  "adapter": "normativity",
+  "architecture": "parallel",
+  "train_size": 50817,
+  "test_size": 8968,
+  "accuracy": 0.8019625334522748,
+  "f1": 0.8223644728945789,
+  "report": {
+    "0": {
+      "precision": 0.8231365215068127,
+      "recall": 0.734445768772348,
+      "f1-score": 0.7762660619803476,
+      "support": 4195.0
+    },
+    "1": {
+      "precision": 0.7867942583732057,
+      "recall": 0.861303163628745,
+      "f1-score": 0.8223644728945789,
+      "support": 4773.0
+    },
+    "accuracy": 0.8019625334522748,
+    "macro avg": {
+      "precision": 0.8049653899400092,
+      "recall": 0.7978744662005466,
+      "f1-score": 0.7993152674374633,
+      "support": 8968.0
+    },
+    "weighted avg": {
+      "precision": 0.8037942353854137,
+      "recall": 0.8019625334522748,
+      "f1-score": 0.800800820599173,
+      "support": 8968.0
+    }
+  },
+  "datasets": [
+    "russian_gec_dataset_final",
+    "LORuGEC",
+    "in_domain_train"
+  ],
+  "description": "Sentence-level grammatical acceptability classifier"
+}

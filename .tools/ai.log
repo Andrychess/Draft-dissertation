@@ -1,0 +1,15 @@
+C:\Users\Андрей\Desktop\Диссертация\AutoAssess\.tools\python311\Lib\site-packages\pydantic\_internal\_fields.py:152: UserWarning: Field "model_path" in Settings has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ('settings_',)`.
+  warnings.warn(
+INFO:     Started server process [34300]
+INFO:     Waiting for application startup.
+WARNING:app.llm.loader:GGUF model not found at C:\Users\Андрей\Desktop\Диссертация\AutoAssess\models\nonexistent.gguf — using heuristic evaluation
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8001 (Press CTRL+C to quit)
+WARNING:app.llm.loader:GGUF model not found at C:\Users\Андрей\Desktop\Диссертация\AutoAssess\models\nonexistent.gguf — using heuristic evaluation
+INFO:     127.0.0.1:49602 - "GET /health HTTP/1.1" 200 OK
+WARNING:app.llm.loader:GGUF model not found at C:\Users\Андрей\Desktop\Диссертация\AutoAssess\models\nonexistent.gguf — using heuristic evaluation
+WARNING:app.llm.loader:GGUF model not found at C:\Users\Андрей\Desktop\Диссертация\AutoAssess\models\nonexistent.gguf — using heuristic evaluation
+INFO:app.routers.evaluate:evaluate a9ec103a-b2e4-40f0-887f-da5ad1f7dc24 completed in 1ms verdict=review
+INFO:     127.0.0.1:49614 - "POST /evaluate HTTP/1.1" 200 OK
