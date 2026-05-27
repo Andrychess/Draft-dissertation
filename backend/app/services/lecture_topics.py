@@ -6,6 +6,7 @@ import json
 import re
 from pathlib import Path
 
+from app.services.cache import invalidate_lecture_cache
 from app.services.lecture_text import load_lecture_text
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -28,6 +29,7 @@ def extract_topics(text: str, limit: int = 40) -> list[str]:
 
 
 def process_lecture_for_template(template_id: int, file_path: str) -> dict:
+    invalidate_lecture_cache(file_path)
     text = load_lecture_text(file_path)
     topics = extract_topics(text) if text else []
     payload = {

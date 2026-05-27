@@ -1,5 +1,6 @@
 import logging
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from fastapi import APIRouter
@@ -25,6 +26,15 @@ DEFAULT_WEIGHTS = {
     "normativity": 0.20,
     "logic": 0.20,
 }
+
+ADAPTER_META = {
+    "relevance": relevance_adapter,
+    "correctness": correctness_adapter,
+    "normativity": normativity_adapter,
+    "logic": logic_adapter,
+}
+
+_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="adapter")
 
 
 def _model_version() -> str:
@@ -61,17 +71,30 @@ async def evaluate(request: EvaluateRequest) -> EvaluateResponse:
         f"[CLS] {request.question} [SEP] {request.reference_answer} "
         f"[SEP] {request.student_answer}"
     )
+    lecture_material = _join_context_materials(request.context_materials)
 
-    rel = relevance_adapter.evaluate(
-        question=request.question,
-        student_answer=request.student_answer,
-        lecture_material=_join_context_materials(request.context_materials),
-        temperature=temperature,
-        template_id=request.template_id,
+    def run_relevance():
+        return relevance_adapter.evaluate(
+            question=request.question,
+            student_answer=request.student_answer,
+            lecture_material=lecture_material,
+            temperature=temperature,
+            template_id=request.template_id,
+        )
+
+    def run_correctness():
+        return correctness_adapter.predict(input_text, temperature)
+
+    def run_normativity():
+        return normativity_adapter.evaluate(request.student_answer, temperature)
+
+    def run_logic():
+        return logic_adapter.evaluate(request.student_answer, temperature)
+
+    rel, cor, norm, log = _executor.map(
+        lambda fn: fn(),
+        (run_relevance, run_correctness, run_normativity, run_logic),
     )
-    cor = correctness_adapter.predict(input_text, temperature)
-    norm = normativity_adapter.evaluate(request.student_answer, temperature)
-    log = logic_adapter.evaluate(request.student_answer, temperature)
 
     total_normalized = (
         rel.score * weights["relevance"]
@@ -90,43 +113,37 @@ async def evaluate(request: EvaluateRequest) -> EvaluateResponse:
     else:
         verdict = "failed"
 
-    weaknesses = []
-    strengths = []
     adapter_map = {
         "relevance": rel,
         "correctness": cor,
         "normativity": norm,
         "logic": log,
     }
+
+    weaknesses: list[str] = []
+    strengths: list[str] = []
+    details: dict = {}
+
     for name, result in adapter_map.items():
         if result.score < 0.5:
             weaknesses.append(f"{name}: {result.comment or 'low score'}")
         elif result.score >= 0.7:
             strengths.append(f"{name}: {result.comment or 'good'}")
-    for mismatch in rel.extra.get("topic_mismatches", []):
-        weaknesses.append(f"relevance: {mismatch}")
 
-    details = {}
-    for name, result in adapter_map.items():
         block = {
             "score": round(result.score * 100, 2),
             "score_normalized": round(result.score, 4),
             "confidence": round(result.confidence, 4),
             "comment": result.comment,
-            "architecture": getattr(
-                {
-                    "relevance": relevance_adapter,
-                    "correctness": correctness_adapter,
-                    "normativity": normativity_adapter,
-                    "logic": logic_adapter,
-                }[name],
-                "architecture",
-                "",
-            ),
+            "architecture": ADAPTER_META[name].architecture,
         }
         if result.extra:
             block.update(result.extra)
         details[name] = block
+
+    for mismatch in rel.extra.get("topic_mismatches", []):
+        weaknesses.append(f"relevance: {mismatch}")
+
     details["weights"] = weights
 
     explanation = (

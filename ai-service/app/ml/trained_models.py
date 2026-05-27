@@ -14,6 +14,7 @@ ADAPTER_DIR = Path(__file__).resolve().parents[2] / "models" / "adapters"
 
 _normativity_model = None
 _logic_model = None
+_topics_cache: dict[int, tuple[float, List[str]]] = {}
 
 
 def _load_joblib(name: str):
@@ -53,8 +54,14 @@ def load_template_topics(template_id: int) -> Optional[List[str]]:
     if not path.exists():
         return None
     try:
+        mtime = path.stat().st_mtime
+        cached = _topics_cache.get(template_id)
+        if cached and cached[0] == mtime:
+            return cached[1]
         data = json.loads(path.read_text(encoding="utf-8"))
-        return data.get("topics") or []
+        topics = data.get("topics") or []
+        _topics_cache[template_id] = (mtime, topics)
+        return topics
     except Exception:
         return None
 
@@ -64,14 +71,14 @@ def predict_normativity(text: str) -> Tuple[float, float, List[dict]]:
     if model is None:
         return 0.0, 0.0, []
 
-    sentences = split_sentences(text) or [text]
-    probs = []
+    sentences = [s for s in split_sentences(text) or [text] if len(s) >= 4]
+    if not sentences:
+        return 0.5, 0.5, []
+
+    probas = model.predict_proba(sentences)[:, 1]
     errors: List[dict] = []
-    for sent in sentences:
-        if len(sent) < 4:
-            continue
-        proba = float(model.predict_proba([sent])[0][1])
-        probs.append(proba)
+    for sent, proba in zip(sentences, probas):
+        proba = float(proba)
         if proba < 0.5:
             errors.append(
                 {
@@ -82,11 +89,8 @@ def predict_normativity(text: str) -> Tuple[float, float, List[dict]]:
                 }
             )
 
-    if not probs:
-        return 0.5, 0.5, errors
-
-    score = sum(probs) / len(probs)
-    confidence = 0.55 + 0.4 * min(1.0, len(probs) / 3)
+    score = float(probas.mean())
+    confidence = 0.55 + 0.4 * min(1.0, len(sentences) / 3)
     return round(score, 3), round(confidence, 3), errors[:5]
 
 
@@ -99,13 +103,12 @@ def predict_logic(text: str) -> Tuple[float, float, List[dict]]:
     if len(sentences) < 2:
         return 0.85, 0.6, []
 
-    pair_scores = []
+    pairs = [f"{sentences[i]} {sentences[i + 1]}" for i in range(len(sentences) - 1)]
+    issue_probas = model.predict_proba(pairs)[:, 1]
+    pair_scores = [1.0 - float(p) for p in issue_probas]
     logic_errors: List[dict] = []
-    for i in range(len(sentences) - 1):
-        s1, s2 = sentences[i], sentences[i + 1]
-        combined = f"{s1} {s2}"
-        issue_proba = float(model.predict_proba([combined])[0][1])
-        pair_scores.append(1.0 - issue_proba)
+    for i, issue_proba in enumerate(issue_probas):
+        issue_proba = float(issue_proba)
         if issue_proba >= 0.55:
             logic_errors.append(
                 {

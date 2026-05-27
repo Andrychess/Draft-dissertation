@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { sessionsApi } from "../api/client";
 import { getDeviceFingerprint } from "../utils/fingerprint";
 
@@ -13,14 +13,23 @@ type FormData = {
 };
 
 export default function SessionJoin() {
-  const { register, handleSubmit } = useForm<FormData>();
+  const [searchParams] = useSearchParams();
+  const codeFromUrl = searchParams.get("code")?.trim() ?? "";
+  const { register, handleSubmit, setValue } = useForm<FormData>({
+    defaultValues: { connection_code: codeFromUrl },
+  });
   const [error, setError] = useState("");
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (codeFromUrl) {
+      setValue("connection_code", codeFromUrl);
+    }
+  }, [codeFromUrl, setValue]);
 
   const onSubmit = async (data: FormData) => {
     setError("");
     try {
-      await sessionsApi.checkCode(data.connection_code);
       const { data: join } = await sessionsApi.join({
         connection_code: data.connection_code,
         student_name: "",
@@ -41,6 +50,11 @@ export default function SessionJoin() {
     <div className="container">
       <div className="card" style={{ maxWidth: 480, margin: "3rem auto" }}>
         <h1>Подключение к сессии</h1>
+        {codeFromUrl && (
+          <p style={{ color: "#555", marginBottom: "1rem" }}>
+            Код из ссылки: <strong>{codeFromUrl}</strong>
+          </p>
+        )}
         <form onSubmit={handleSubmit(onSubmit)}>
           <label>Код подключения</label>
           <input {...register("connection_code", { required: true })} />

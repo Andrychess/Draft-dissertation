@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { sessionsApi, templatesApi } from "../api/client";
+import StudentJoinActions from "../components/StudentJoinActions";
+import { logout } from "../utils/auth";
 
 export default function TeacherPanel() {
   const [templates, setTemplates] = useState<{ id: number; name: string }[]>([]);
@@ -17,7 +19,7 @@ export default function TeacherPanel() {
     <div className="container">
       <div className="nav">
         {localStorage.getItem("role") === "admin" && <Link to="/admin">Админ</Link>}
-        <a href="#" onClick={() => { localStorage.clear(); window.location.href = "/login"; }}>Выход</a>
+        <a href="#" onClick={(e) => { e.preventDefault(); logout(); }}>Выход</a>
       </div>
       <h1>Панель преподавателя</h1>
 
@@ -67,7 +69,10 @@ export default function TeacherPanel() {
                 <td>{s.connection_code}</td>
                 <td>{s.status}</td>
                 <td>
-                  <Link to={`/sessions/${s.id}/results`}>Результаты</Link>
+                  <StudentJoinActions connectionCode={s.connection_code} />
+                  <Link to={`/sessions/${s.id}/results`} style={{ marginLeft: "0.5rem" }}>
+                    Результаты
+                  </Link>
                 </td>
               </tr>
             ))}

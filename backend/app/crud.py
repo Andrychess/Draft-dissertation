@@ -304,17 +304,23 @@ def get_sheet_rows(db: Session, sheet_id: int) -> List[AnswerSheet]:
 def save_answer(db: Session, sheet_id: int, question_id: int, answer_text: str) -> StudentAnswer:
     row = (
         db.query(AnswerSheet)
+        .options(joinedload(AnswerSheet.student_answer))
         .filter(AnswerSheet.sheet_id == sheet_id, AnswerSheet.question_id == question_id)
         .first()
     )
     if not row:
         raise ValueError("Answer sheet row not found")
 
-    if row.answer_id:
+    if row.answer_id and row.student_answer:
+        answer = row.student_answer
+        answer.answer_text = answer_text
+        answer.saved_at = datetime.now(timezone.utc)
+    elif row.answer_id:
         answer = db.query(StudentAnswer).filter(StudentAnswer.answer_id == row.answer_id).first()
-        if answer:
-            answer.answer_text = answer_text
-            answer.saved_at = datetime.now(timezone.utc)
+        if not answer:
+            raise ValueError("Student answer not found")
+        answer.answer_text = answer_text
+        answer.saved_at = datetime.now(timezone.utc)
     else:
         answer = StudentAnswer(answer_text=answer_text)
         db.add(answer)
@@ -346,10 +352,16 @@ def get_session_results(db: Session, session_id: int) -> List[dict]:
     for row in rows:
         by_sheet.setdefault(row.sheet_id, []).append(row)
 
+    sheet_ids = list(by_sheet.keys())
+    ai_by_sheet: dict[int, list[AICheckResult]] = {sid: [] for sid in sheet_ids}
+    if sheet_ids:
+        for ai in db.query(AICheckResult).filter(AICheckResult.sheet_id.in_(sheet_ids)).all():
+            ai_by_sheet.setdefault(ai.sheet_id, []).append(ai)
+
     results = []
     for sheet_id, sheet_rows in by_sheet.items():
         first = sheet_rows[0]
-        ai_rows = db.query(AICheckResult).filter(AICheckResult.sheet_id == sheet_id).all()
+        ai_rows = ai_by_sheet.get(sheet_id, [])
         max_score = sum(r.question.max_score for r in sheet_rows if r.question)
         total = sum((r.corrected_score or r.score) for r in ai_rows)
         verdicts = [r.verdict.value for r in ai_rows]
@@ -411,6 +423,17 @@ def create_ai_check_result(db: Session, **kwargs) -> AICheckResult:
     return result
 
 
+def create_ai_check_results_bulk(db: Session, items: List[dict]) -> List[AICheckResult]:
+    if not items:
+        return []
+    results = [AICheckResult(**item) for item in items]
+    db.add_all(results)
+    db.commit()
+    for result in results:
+        db.refresh(result)
+    return results
+
+
 def list_system_logs(db: Session, limit: int = 100) -> List:
     from app.models import SystemLog
 
@@ -425,6 +448,7 @@ def get_system_settings(db: Session) -> dict[str, str]:
 
 def update_system_settings(db: Session, values: dict[str, str]) -> dict[str, str]:
     from app.models import SystemSetting
+    from app.services.cache import invalidate_settings_cache
 
     for key, value in values.items():
         row = db.query(SystemSetting).filter(SystemSetting.key == key).first()
@@ -433,11 +457,13 @@ def update_system_settings(db: Session, values: dict[str, str]) -> dict[str, str
         else:
             db.add(SystemSetting(key=key, value=value))
     db.commit()
+    invalidate_settings_cache()
     return get_system_settings(db)
 
 
-def get_student_results(db: Session, sheet_id: int) -> List[dict]:
-    rows = get_sheet_rows(db, sheet_id)
+def get_student_results(db: Session, sheet_id: int, rows: Optional[List[AnswerSheet]] = None) -> List[dict]:
+    if rows is None:
+        rows = get_sheet_rows(db, sheet_id)
     if not rows:
         return []
     out = []

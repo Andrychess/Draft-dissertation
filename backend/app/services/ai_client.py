@@ -48,16 +48,27 @@ class AIClient:
     def __init__(self, base_url: str, timeout: int = 30):
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
+        self._client: Optional[httpx.AsyncClient] = None
+
+    async def _client_instance(self) -> httpx.AsyncClient:
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.AsyncClient(timeout=self.timeout)
+        return self._client
+
+    async def close(self) -> None:
+        if self._client is not None:
+            await self._client.aclose()
+            self._client = None
 
     async def evaluate(self, request: EvaluateRequest) -> EvaluateResponse:
         try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.post(
-                    f"{self.base_url}/evaluate",
-                    json=request.model_dump(),
-                )
-                response.raise_for_status()
-                return EvaluateResponse(**response.json())
+            client = await self._client_instance()
+            response = await client.post(
+                f"{self.base_url}/evaluate",
+                json=request.model_dump(),
+            )
+            response.raise_for_status()
+            return EvaluateResponse(**response.json())
         except Exception:
             return EvaluateResponse(
                 request_id=request.request_id,
@@ -73,8 +84,13 @@ class AIClient:
                 processing_time_ms=0,
             )
 
+    async def evaluate_many(self, requests: List[EvaluateRequest]) -> List[EvaluateResponse]:
+        import asyncio
+
+        return await asyncio.gather(*(self.evaluate(req) for req in requests))
+
     async def health(self) -> dict:
-        async with httpx.AsyncClient(timeout=5) as client:
-            response = await client.get(f"{self.base_url}/health")
-            response.raise_for_status()
-            return response.json()
+        client = await self._client_instance()
+        response = await client.get(f"{self.base_url}/health")
+        response.raise_for_status()
+        return response.json()

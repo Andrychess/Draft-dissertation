@@ -4,24 +4,30 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app import crud
+from app.config import settings
 from app.database import get_db
 from app.schemas import AnswerSaveRequest, AnswerSaveResponse, AnswerSubmitRequest
-from app.services.orchestrator import Orchestrator
 from app.services.ai_client import AIClient
-from app.config import settings
+from app.services.orchestrator import Orchestrator
 
 router = APIRouter(prefix="/api/answers", tags=["answers"])
 
 
-def _run_orchestrator(sheet_id: int, timeout: int = 60):
+async def _run_orchestrator(sheet_id: int, timeout: int = 60):
     from app.database import SessionLocal
 
     db = SessionLocal()
+    client = AIClient(settings.ai_service_url, timeout)
     try:
-        orchestrator = Orchestrator(AIClient(settings.ai_service_url, timeout), db)
-        asyncio.run(orchestrator.process_submission(sheet_id))
+        orchestrator = Orchestrator(client, db)
+        await orchestrator.process_submission(sheet_id)
     finally:
+        await client.close()
         db.close()
+
+
+def _run_orchestrator_sync(sheet_id: int, timeout: int = 60):
+    asyncio.run(_run_orchestrator(sheet_id, timeout))
 
 
 @router.post("/save", response_model=AnswerSaveResponse)
@@ -58,5 +64,5 @@ def submit_answers(
     )
     settings = crud.get_system_settings(db)
     timeout = int(settings.get("ai_timeout_sec", settings.get("AI_TIMEOUT", "60")))
-    background_tasks.add_task(_run_orchestrator, body.sheet_id, timeout)
+    background_tasks.add_task(_run_orchestrator_sync, body.sheet_id, timeout)
     return {"status": "submitted", "sheet_id": body.sheet_id}

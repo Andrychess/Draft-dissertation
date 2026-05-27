@@ -2,6 +2,13 @@ import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link, useNavigate } from "react-router-dom";
 import { groupsApi, sessionsApi, templatesApi } from "../api/client";
+import StudentJoinActions from "../components/StudentJoinActions";
+
+type CreatedSession = {
+  id: number;
+  name: string;
+  connection_code: string;
+};
 
 export default function SessionForm() {
   const navigate = useNavigate();
@@ -9,6 +16,7 @@ export default function SessionForm() {
     defaultValues: { name: "", template_id: "", group_ciphers: "" },
   });
   const [templates, setTemplates] = useState<{ id: number; name: string }[]>([]);
+  const [created, setCreated] = useState<CreatedSession | null>(null);
 
   useEffect(() => {
     templatesApi.list().then((r) => setTemplates(r.data));
@@ -24,9 +32,38 @@ export default function SessionForm() {
       template_id: Number(data.template_id),
       group_ciphers: ciphers,
     });
-    navigate("/teacher");
-    alert(`Сессия создана. Код подключения: ${session.connection_code}`);
+    setCreated({
+      id: session.id,
+      name: session.name,
+      connection_code: session.connection_code,
+    });
   };
+
+  if (created) {
+    return (
+      <div className="container">
+        <Link to="/teacher">← Назад</Link>
+        <div className="card">
+          <h1>Сессия создана</h1>
+          <p>
+            <strong>{created.name}</strong>
+          </p>
+          <p>
+            Код подключения: <strong>{created.connection_code}</strong>
+          </p>
+          <StudentJoinActions connectionCode={created.connection_code} showUrl />
+          <button
+            type="button"
+            className="secondary"
+            style={{ marginTop: "1rem" }}
+            onClick={() => navigate("/teacher")}
+          >
+            К списку сессий
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="container">

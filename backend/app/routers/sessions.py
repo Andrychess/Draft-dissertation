@@ -101,12 +101,11 @@ def join_session(body: SessionJoinRequest, db: Session = Depends(get_db)):
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    session = crud.get_session(db, session_id)
     return SessionJoinResponse(
         session_id=session_id,
         sheet_id=sheet_id,
-        session_name=session.name if session else "",
-        status=session.status if session else SessionStatus.active,
+        session_name=session.name,
+        status=session.status,
     )
 
 

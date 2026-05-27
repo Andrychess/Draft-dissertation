@@ -16,7 +16,7 @@ def student_results(sheet_id: int):
             raise HTTPException(status_code=404, detail="Sheet not found")
         if not rows[0].submitted_at:
             raise HTTPException(status_code=400, detail="Answers not submitted yet")
-        return crud.get_student_results(db, sheet_id)
+        return crud.get_student_results(db, sheet_id, rows=rows)
     finally:
         db.close()
 
